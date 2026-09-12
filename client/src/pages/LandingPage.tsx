@@ -12,58 +12,46 @@ export function LandingPage() {
     <div className="min-h-screen bg-surface-50 text-surface-900 gradient-warm flex flex-col selection:bg-sarthak-200">
       {/* ── Top Header ── */}
       <header className="sticky top-0 z-40 bg-surface-50/90 backdrop-blur-md border-b border-surface-200/80 px-4 sm:px-8 py-3.5 transition-all">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-11 h-11 rounded-2xl bg-sarthak-600 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+          {/* Leftmost Corner: Brand & Subtitle */}
+          <Link to="/" className="flex items-center gap-2.5 sm:gap-3 group shrink-0">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-sarthak-600 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <Shield size={22} className="stroke-[2.2]" />
             </div>
-            <div>
-              <span className="text-xl sm:text-2xl font-bold tracking-tight text-surface-900 block leading-tight">
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+              <span className="text-xl sm:text-2xl font-black tracking-tight text-surface-900 block leading-tight">
                 Sarthak
               </span>
-              <span className="text-xs font-medium text-surface-700 hidden sm:block">
-                {t('landing.tagline')}
+              <span className="text-xs sm:text-sm font-semibold text-surface-600 tracking-tight">
+                Senior Safety &amp; Care Companion
               </span>
             </div>
           </Link>
 
-          {/* Nav links */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-surface-700">
-            <a href="#how-it-works" className="hover:text-sarthak-700 transition-colors">{t('landing.navHowItWorks')}</a>
-            <a href="#privacy" className="hover:text-sarthak-700 transition-colors">{t('landing.navPrivacy')}</a>
-            <a href="#support" className="hover:text-sarthak-700 transition-colors">{t('landing.navSupport')}</a>
-          </nav>
-
+          {/* Rightmost Corner: Language Switcher, Caregiver Portal, and Get Started */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* 1-Click Global Language Switcher */}
             <LanguageSwitcher variant="pill" />
 
             {isAuthenticated ? (
               <Link
                 to={isCaregiver ? "/dashboard" : "/companion"}
-                className="btn-primary py-2.5 px-4 text-sm sm:text-base font-semibold"
+                className="btn-primary py-2 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
               >
                 <span>{isCaregiver ? t('landing.goToDashboard') : t('landing.goToCompanion')}</span>
-                <ArrowRight size={16} />
+                <ArrowRight size={15} />
               </Link>
             ) : (
               <>
                 <Link
                   to="/caregiver/login"
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold text-surface-700 hover:text-sarthak-800 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-surface-800 hover:text-sarthak-800 bg-surface-100 hover:bg-surface-200 border border-surface-200/80 rounded-xl transition-colors shadow-2xs"
                 >
                   <KeyRound size={15} className="text-sarthak-700" />
                   <span>{t('landing.caregiverPortalBtn')}</span>
                 </Link>
                 <Link
-                  to="/login"
-                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-surface-800 hover:text-sarthak-700 transition-colors"
-                >
-                  {t('nav.login')}
-                </Link>
-                <Link
                   to="/register"
-                  className="btn-primary py-2 px-3.5 sm:px-5 text-xs sm:text-sm font-bold"
+                  className="btn-primary py-2 px-3.5 sm:px-5 text-xs sm:text-sm font-bold shadow-sm"
                 >
                   {t('nav.register')}
                 </Link>
@@ -305,9 +293,15 @@ export function LandingPage() {
             </Link>
           </div>
 
-          <p className="text-xs text-sarthak-200 pt-4">
-            {t('landing.ctaEmail')} <a href="mailto:support@sarthak.care" className="underline font-medium">support@sarthak.care</a> — {t('landing.ctaResponseTime')}
-          </p>
+          <div className="pt-6">
+            <p className="text-base sm:text-lg md:text-xl font-medium text-sarthak-100 max-w-2xl mx-auto leading-relaxed bg-sarthak-800/50 py-3.5 px-6 rounded-2xl border border-sarthak-600/60 inline-block shadow-sm">
+              {t('landing.ctaEmail')}{' '}
+              <a href="mailto:support@sarthak.care" className="underline font-bold text-white hover:text-sarthak-200 transition-colors">
+                support@sarthak.care
+              </a>{' '}
+              — {t('landing.ctaResponseTime')}
+            </p>
+          </div>
         </div>
 
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl pointer-events-none" />
