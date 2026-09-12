@@ -1,12 +1,30 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Heart, EyeOff, Camera, Users, ArrowRight, CheckCircle2, Lock, BellRing, KeyRound } from 'lucide-react';
+import { Shield, Heart, EyeOff, Camera, Users, ArrowRight, CheckCircle2, Lock, BellRing, KeyRound, Pill, Sparkles, Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 
 export function LandingPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isAuthenticated, isCaregiver } = useAuth();
+
+  const [phraseIndex, setPhraseIndex] = useState(0);
+
+  const phrasesByLang: Record<string, string[]> = {
+    hi: ['कभी अनसुने नहीं।', 'हमेशा सुरक्षित।', 'परिवार से जुड़े हुए।'],
+    kn: ['ಎಂದಿಗೂ ಕಡೆಗಣಿಸುವುದಿಲ್ಲ.', 'ಯಾವಾಗಲೂ ಸುರಕ್ಷಿತ.', 'ಕುಟುಂಬದೊಂದಿಗೆ ಸಂಪರ್ಕ.'],
+    en: ['Never unheard.', 'Always protected.', 'Connected to family.'],
+  };
+
+  const currentPhrases = phrasesByLang[i18n.language] || phrasesByLang.en;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPhraseIndex((prev) => (prev + 1) % currentPhrases.length);
+    }, 3600);
+    return () => clearInterval(timer);
+  }, [currentPhrases.length]);
 
   return (
     <div className="min-h-screen bg-surface-50 text-surface-900 gradient-warm flex flex-col selection:bg-sarthak-200">
@@ -71,9 +89,14 @@ export function LandingPage() {
               <span>{t('landing.badge')}</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-surface-900 tracking-tight leading-[1.15]">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-display font-bold text-surface-900 tracking-tight leading-[1.15]">
               {t('landing.hero1')} <br />
-              <span className="text-sarthak-700">{t('landing.hero2')}</span>
+              <span
+                key={currentPhrases[phraseIndex % currentPhrases.length]}
+                className="headline-phrase font-display italic text-sarthak-700"
+              >
+                <em>{currentPhrases[phraseIndex % currentPhrases.length]}</em>
+              </span>
             </h1>
 
             <p className="text-lg sm:text-xl text-surface-700 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-normal">
@@ -115,32 +138,75 @@ export function LandingPage() {
             </div>
           </div>
 
-          {/* Hero Photography Card */}
-          <div className="lg:col-span-5 relative">
-            <div className="relative rounded-3xl overflow-hidden shadow-xl border-4 border-white bg-white">
-              <img
-                src="/images/senior_hero.jpg"
-                alt="Smiling elderly grandfather resting peacefully in his living room"
-                className="w-full h-auto object-cover max-h-[460px]"
-                loading="eager"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-surface-900/60 via-transparent to-transparent" />
-              
-              {/* Overlay card */}
-              <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md rounded-2xl p-4 border border-surface-200 shadow-lg flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-sarthak-100 text-sarthak-700 flex items-center justify-center shrink-0">
-                  <Shield size={22} />
+          {/* CareCircle-Style Organic Arched Photo Frame (Authentic Non-AI Elder Connection) */}
+          <div className="lg:col-span-5 relative flex justify-center items-center py-6 sm:py-8">
+            <div className="relative flex justify-center items-center w-full min-h-[480px]">
+              {/* Dashed ambient orbit rings */}
+              <div className="hero-orbit hero-orbit--one" />
+              <div className="hero-orbit hero-orbit--two" />
+
+              {/* Sparkle playful doodle top left */}
+              <div
+                className="absolute -top-3 left-4 text-amber-500/80 z-20 pointer-events-none"
+                style={{ animation: 'sparkle-drift 3.8s ease-in-out infinite' }}
+              >
+                <Sparkles size={28} />
+              </div>
+
+              {/* Top Right Floating Badge */}
+              <div
+                className="absolute -top-2 right-0 sm:-right-4 z-20 bg-white/95 backdrop-blur-md rounded-2xl px-4 py-3 border border-surface-200 shadow-lg flex items-center gap-3"
+                style={{ animation: 'gentle-float 4.5s ease-in-out infinite' }}
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Shield size={18} className="stroke-[2.2]" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-sarthak-800 uppercase tracking-wider">{t('landing.heroOverlayTag')}</p>
-                  <p className="text-sm font-bold text-surface-900">{t('landing.heroOverlayDesc')}</p>
+                  <strong className="text-xs font-bold text-surface-900 block leading-tight">
+                    Fall Guard Active
+                  </strong>
+                  <span className="text-[10px] font-semibold text-emerald-700 block mt-0.5">
+                    Living Room • All Clear
+                  </span>
+                </div>
+              </div>
+
+              {/* The Organic Arched Photo Frame (Non-rectangular, authentic elder portrait) */}
+              <div className="photo-frame">
+                <img
+                  src="/images/elderly_hero.jpg"
+                  alt="A family member warmly embracing an older woman at home"
+                  className="w-full h-full object-cover"
+                />
+                <div className="photo-wash" />
+
+                {/* Subtle caption overlay inside the arched frame */}
+                <div className="absolute bottom-4 left-4 right-4 z-10 text-white flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-bold tracking-wide drop-shadow-md">
+                    Always connected • Privacy protected
+                  </span>
+                </div>
+              </div>
+
+              {/* Bottom Left Floating Badge */}
+              <div
+                className="absolute -bottom-4 -left-2 sm:-left-6 z-20 bg-white/95 backdrop-blur-md rounded-2xl px-4 py-3 border border-surface-200 shadow-lg flex items-center gap-3"
+                style={{ animation: 'gentle-float 4.5s ease-in-out 1.2s infinite' }}
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                  <Pill size={18} />
+                </div>
+                <div>
+                  <strong className="text-xs font-bold text-surface-900 block leading-tight">
+                    Single-Lens Verified
+                  </strong>
+                  <span className="text-[10px] font-medium text-surface-600 block mt-0.5">
+                    Hand-to-mouth adherence ✓
+                  </span>
                 </div>
               </div>
             </div>
-            
-            {/* Gentle decorative ambient blur */}
-            <div className="absolute -bottom-8 -right-8 w-44 h-44 bg-sarthak-200/50 rounded-full blur-3xl -z-10" />
-            <div className="absolute -top-8 -left-8 w-44 h-44 bg-amber-200/40 rounded-full blur-3xl -z-10" />
           </div>
 
         </div>

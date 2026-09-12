@@ -4,6 +4,11 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        display: ['Fraunces', 'Georgia', 'serif'],
+        sans: ['DM Sans', 'Plus Jakarta Sans', 'Inter', 'sans-serif'],
+        body: ['DM Sans', 'Plus Jakarta Sans', 'Inter', 'sans-serif'],
+      },
       colors: {
         sarthak: {
           50: '#f4f7f4',
