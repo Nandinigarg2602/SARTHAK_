@@ -179,29 +179,6 @@ SARTHAK_/
 
 ---
 
-## 🚀 Live Evaluation & Demo Guide
-
-To test or evaluate Sarthak's capabilities in real time:
-
-1. **Start Services**:
-   - Backend: `cd server && npm run dev` (running on `http://localhost:5000`)
-   - Frontend: `cd client && npm run dev` (running on `http://localhost:5173`)
-
-2. **Testing Edge Fall Detection**:
-   - **Method A (Floor Collapse / Crouch)**: Crouch or sit down low on the floor. After 0.8s of floor immobility, Sarthak triggers the 15-second grace window with audible Hindi/English prompts.
-   - **Method B (Drop Out of Frame)**: Duck or plunge downward below your webcam / laptop screen bezel. Sarthak detects the downward trajectory and confirms a fall in 1.0s.
-   - **Method C (One-Click Fall Simulator)**: Tap **`Trigger Test Fall`** on the senior companion view for an instant trigger.
-
-3. **Testing Multilingual Voice Assistant**:
-   - **Distress Escalation**: Say *"Help!"*, *"I fell!"*, or *"बचाओ!"*. The system escalates immediately and calls the emergency contact.
-   - **Voice Cancellation**: During the grace countdown, say *"I am okay"*, *"all good"*, or *"ठीक हूँ"*. The alert immediately cancels and confirms the senior is safe.
-
-4. **Testing Single-Lens Medication Ingestion**:
-   - Switch to **Medication Mode** or wait for scheduled dose alert.
-   - Lift a glass of water or pill toward your mouth and hold for 1.4s, then lower your hand. The 4-phase state machine verifies the dose and logs adherence to the caregiver dashboard.
-
----
-
 ## 🔒 Privacy & Security Guarantees
 
 1. **Zero Cloud Video Ingestion**: Webcam frames are analyzed inside the browser's GPU/WASM sandboxed memory and discarded every frame. No video or photo is transmitted across the network.
