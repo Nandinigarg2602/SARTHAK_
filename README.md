@@ -1,4 +1,4 @@
-# 🛡️ Sarthak (सार्थक) — Autonomous AI Telecare & Senior Companion
+# 🛡️ Sarthak (सार्थक) — AI Safety Companion for Elderly
 
 > **A privacy-first, edge-native telecare platform for seniors living independently. Features client-side computer vision for fall & abnormal posture detection, single-lens medication adherence tracking, multilingual voice assistance (English, Hindi, Kannada), and automated caregiver emergency escalation.**
 
