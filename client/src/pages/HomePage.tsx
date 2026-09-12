@@ -72,6 +72,10 @@ export function HomePage() {
   const lastAlertEventIdRef = useRef<string | null>(null);
   const voiceAssistantRef = useRef<any>(null);
   const resolveActiveEmergencyRef = useRef<() => void>(() => {});
+  const alertStateRef = useRef<string>(alertState);
+  useEffect(() => {
+    alertStateRef.current = alertState;
+  }, [alertState]);
 
   // Single-Lens Medication Ingestion & Offline Protection State
   const [isMedicationMode, setIsMedicationMode] = useState<boolean>(false);
@@ -142,8 +146,10 @@ export function HomePage() {
       targetFps: 6,
     },
     (emergencyEvent) => {
-      // Automatically turn on microphone immediately when emergency/fall is detected
-      voiceAssistantRef.current?.startListening();
+      // If grace window or emergency alert is already active, do not re-trigger or glitch
+      if (alertStateRef.current !== 'none' || graceWindow.isActive) {
+        return;
+      }
       setAlertState('grace_period');
       graceWindow.startGraceWindow();
       const desc = emergencyEvent?.description || 'Severe posture collapse / fall detected';
@@ -165,8 +171,12 @@ export function HomePage() {
     patientName: user?.fullName || 'Senior',
     nextMedicationText: nextMed ? `${nextMed.time} ${nextMed.name}` : undefined,
     onDistressDetected: (phrase) => {
-      graceWindow.cancelGraceWindow();
-      setAlertState('escalating');
+      // If grace window is active, escalate immediately with distress
+      if (graceWindow.isActive) {
+        graceWindow.manualResponse('distress');
+      } else {
+        setAlertState('escalating');
+      }
       showToast(`Emergency vocal distress detected ("${phrase}") — Calling caregiver now.`, 'alert');
       addEventTrace(`Vocal distress recognized: "${phrase}" — emergency call dispatched`, 'alert');
       if (user) {
@@ -182,7 +192,7 @@ export function HomePage() {
       }
     },
     onSafeConfirmed: () => {
-      if (alertState !== 'none') {
+      if (alertState !== 'none' || graceWindow.isActive) {
         resolveActiveEmergencyRef.current();
       }
     },
@@ -191,7 +201,7 @@ export function HomePage() {
 
   // Resolution handler: Patient or voice confirms help has arrived / safe now
   const resolveActiveEmergency = useCallback(async () => {
-    graceWindow.cancelGraceWindow();
+    graceWindow.stopGraceWindow();
     setAlertState('none');
     poseDetection.resetFallState();
     showToast('Emergency resolved — Family & caregiver notified that you are safe.', 'success');
@@ -216,11 +226,15 @@ export function HomePage() {
   }, [resolveActiveEmergency]);
 
   // Automatically activate microphone whenever emergency distress or grace window is active
+  const isVoiceListening = voiceAssistant.isListening;
+  const startVoiceListening = voiceAssistant.startListening;
   useEffect(() => {
     if (alertState === 'grace_period' || alertState === 'escalating' || graceWindow.isActive) {
-      voiceAssistant.startListening();
+      if (!isVoiceListening) {
+        startVoiceListening();
+      }
     }
-  }, [alertState, graceWindow.isActive, voiceAssistant]);
+  }, [alertState, graceWindow.isActive, isVoiceListening, startVoiceListening]);
 
   // Clock update
   useEffect(() => {
@@ -1200,8 +1214,7 @@ export function HomePage() {
         secondsRemaining={graceWindow.secondsRemaining}
         onSafe={() => graceWindow.manualResponse('safe')}
         onHelp={() => {
-          graceWindow.cancelGraceWindow();
-          setAlertState('escalating');
+          graceWindow.manualResponse('distress');
           showToast('Emergency SOS confirmed — Calling caregiver immediately.', 'alert');
           addEventTrace('Senior confirmed emergency help in modal — calling caregiver', 'alert');
           if (user) {

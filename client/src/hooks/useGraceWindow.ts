@@ -16,6 +16,7 @@ interface UseGraceWindowReturn {
   secondsRemaining: number;
   startGraceWindow: () => void;
   cancelGraceWindow: () => void;
+  stopGraceWindow: () => void;
   manualResponse: (response: 'safe' | 'distress') => void;
 }
 
@@ -78,9 +79,20 @@ export function useGraceWindow(
       utterance.lang = language;
       utterance.rate = 0.9;
       utterance.volume = 1;
+      (window as any).__sarthak_is_speaking = true;
+      (window as any).__sarthak_last_system_prompt = promptText.toLowerCase();
+      utterance.onend = () => {
+        setTimeout(() => {
+          (window as any).__sarthak_is_speaking = false;
+        }, 800);
+      };
+      utterance.onerror = () => {
+        (window as any).__sarthak_is_speaking = false;
+      };
       speechSynthesis.speak(utterance);
     } catch {
       console.warn('[GRACE] Speech synthesis not available');
+      (window as any).__sarthak_is_speaking = false;
     }
 
     // Start countdown
@@ -150,6 +162,12 @@ export function useGraceWindow(
     resolveGrace('SAFE');
   }, [resolveGrace]);
 
+  const stopGraceWindow = useCallback(() => {
+    cleanup();
+    setIsActive(false);
+    setResult('PENDING');
+  }, [cleanup]);
+
   const manualResponse = useCallback(
     (response: 'safe' | 'distress') => {
       resolveGrace(response === 'safe' ? 'SAFE' : 'DISTRESS');
@@ -168,6 +186,7 @@ export function useGraceWindow(
     secondsRemaining,
     startGraceWindow,
     cancelGraceWindow,
+    stopGraceWindow,
     manualResponse,
   };
 }

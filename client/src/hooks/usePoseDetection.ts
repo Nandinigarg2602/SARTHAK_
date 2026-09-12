@@ -106,10 +106,18 @@ export function usePoseDetection(
     bboxWidth: number;
     aspectRatio: number;
     spineAngleDeg: number;
+    noseY?: number;
     timestamp: number;
   }>>([]);
 
-  // Behavioral timers
+  // Behavioral timers & Fall State Machine
+  const baselineTorsoYRef = useRef<number | null>(null);
+  const fallCandidateRef = useRef<{
+    timestamp: number;
+    startY: number;
+    startSpineAngle: number;
+  } | null>(null);
+  const disappearanceStartTime = useRef<number | null>(null);
   const collapseStartTime = useRef<number | null>(null);
   const floorStartTime = useRef<number | null>(null);
   const slumpStartTime = useRef<number | null>(null);
@@ -118,10 +126,11 @@ export function usePoseDetection(
   const lastAbnormalAlertTime = useRef<number>(0);
 
   // ── Medication Ingestion State Machine ──
-  // Phases: 'IDLE' -> 'HAND_RAISING' -> 'AT_MOUTH' -> 'COMPLETED'
-  type IngestionPhase = 'IDLE' | 'HAND_RAISING' | 'AT_MOUTH';
+  // 4-Phase Physical Arc: 'IDLE' -> 'HAND_LOWERED' -> 'HAND_RAISING' -> 'AT_MOUTH' -> 'RETRACTING'
+  type IngestionPhase = 'IDLE' | 'HAND_LOWERED' | 'HAND_RAISING' | 'AT_MOUTH' | 'RETRACTING';
   const ingestionPhaseRef = useRef<IngestionPhase>('IDLE');
   const activeHandRef = useRef<'left' | 'right' | null>(null);
+  const handLoweredStartTime = useRef<number | null>(null);
   const atMouthStartTime = useRef<number | null>(null);
   const lastIngestionTriggerTime = useRef<number>(0);
 
@@ -223,6 +232,51 @@ export function usePoseDetection(
       const now = Date.now();
 
       if (!landmarks || landmarks.length === 0) {
+        // Trigger out-of-frame fall IF preceded by a downward plunge towards bottom bezel
+        const hadRecentPlunge =
+          (fallCandidateRef.current !== null && (now - fallCandidateRef.current.timestamp <= 3000)) ||
+          (historyRef.current.length >= 2 && (() => {
+            const lastFrames = historyRef.current.slice(-5);
+            const first = lastFrames[0];
+            const last = lastFrames[lastFrames.length - 1];
+            return (last.torsoY > first.torsoY + 0.07) || (last.torsoY > 0.65);
+          })());
+
+        if (hadRecentPlunge) {
+          if (!disappearanceStartTime.current) {
+            disappearanceStartTime.current = now;
+            console.log('[POSE FALL] Subject dropped below camera after plunge. Verifying immobility...');
+          } else if (now - disappearanceStartTime.current >= 1000) {
+            console.log('[POSE FALL] CONFIRMED FALL: Subject plunged out of frame and remained absent for > 1.0s');
+            setPosture('Ground / Lowered');
+            setBehavior('Fall Detected');
+            setBehaviorTelemetry({
+              behavior: 'Fall Detected',
+              isAbnormal: true,
+              isEmergency: true,
+              confidence: 0.96,
+              postureStability: 5,
+              movementVelocity: 'Still',
+              floorTimeSeconds: Math.floor((now - disappearanceStartTime.current) / 1000),
+            });
+            if (now - lastEmergencyTriggerTime.current > 15000) {
+              lastEmergencyTriggerTime.current = now;
+              setFallDetected(true);
+              onFallDetected?.({
+                type: 'FALL',
+                description: 'Severe posture collapse to floor (dropped below camera view)',
+                confidence: 0.96,
+                timestamp: now,
+              });
+            }
+            return;
+          }
+          setPosture('Ground / Lowered');
+          setBehavior('Fall Detected');
+          return;
+        }
+
+        // Normal absence (person stepped away or room empty)
         setPosture('No Person');
         setBehavior('No Person');
         setLandmarksCount(0);
@@ -237,6 +291,8 @@ export function usePoseDetection(
         });
         collapseStartTime.current = null;
         floorStartTime.current = null;
+        disappearanceStartTime.current = null;
+        fallCandidateRef.current = null;
         slumpStartTime.current = null;
         agitationStartTime.current = null;
         return;
@@ -259,10 +315,45 @@ export function usePoseDetection(
       setLandmarksCount(visibleCount);
 
       if (visibleCount < 5) {
+        if (fallCandidateRef.current && (now - fallCandidateRef.current.timestamp <= 2500)) {
+          if (!disappearanceStartTime.current) {
+            disappearanceStartTime.current = now;
+          } else if (now - disappearanceStartTime.current >= 1800) {
+            setPosture('Ground / Lowered');
+            setBehavior('Fall Detected');
+            setBehaviorTelemetry({
+              behavior: 'Fall Detected',
+              isAbnormal: true,
+              isEmergency: true,
+              confidence: 0.95,
+              postureStability: 5,
+              movementVelocity: 'Still',
+              floorTimeSeconds: Math.floor((now - disappearanceStartTime.current) / 1000),
+            });
+            if (now - lastEmergencyTriggerTime.current > 18000) {
+              lastEmergencyTriggerTime.current = now;
+              setFallDetected(true);
+              onFallDetected?.({
+                type: 'FALL',
+                description: 'Severe posture collapse to floor (partial occlusion / out of frame)',
+                confidence: 0.95,
+                timestamp: now,
+              });
+            }
+            return;
+          }
+          setPosture('Ground / Lowered');
+          setBehavior('Fall Detected');
+          return;
+        }
+
         setPosture('No Person');
         setBehavior('No Person');
         return;
       }
+
+      // Person is clearly visible in frame — reset out-of-frame timer
+      disappearanceStartTime.current = null;
 
       const nose = pose[0];
       const shoulderL = pose[11];
@@ -303,7 +394,7 @@ export function usePoseDetection(
       const bboxWidth = Math.max(maxX - minX, 0.05);
       const aspectRatio = bboxHeight / bboxWidth;
 
-      // Update history buffer (rolling 2200ms)
+      // Update history buffer (rolling 2500ms)
       historyRef.current.push({
         torsoY,
         torsoX,
@@ -316,9 +407,10 @@ export function usePoseDetection(
         bboxWidth,
         aspectRatio,
         spineAngleDeg,
+        noseY: nose ? nose.y : undefined,
         timestamp: now,
       });
-      historyRef.current = historyRef.current.filter((f) => now - f.timestamp <= 2200);
+      historyRef.current = historyRef.current.filter((f) => now - f.timestamp <= 2500);
 
       // Kinematic velocity over 200ms - 450ms
       const velocityFrames = historyRef.current.filter(
@@ -331,6 +423,47 @@ export function usePoseDetection(
         const dt = Math.max(0.1, (now - past.timestamp) / 1000);
         velY = (torsoY - past.torsoY) / dt; // Positive = downward movement
         velX = Math.abs(torsoX - past.torsoX) / dt;
+      }
+
+      // ── DYNAMIC UPRIGHT BASELINE CALIBRATION ──
+      // Tracks user's natural seated or standing height to prevent false alarms
+      const isUprightAndCalm = spineAngleDeg < 25 && Math.abs(velY) < 0.08 && Math.abs(velX) < 0.08;
+      if (baselineTorsoYRef.current === null && torsoY < 0.75) {
+        baselineTorsoYRef.current = torsoY;
+      } else if (isUprightAndCalm) {
+        // Slow continuous baseline adaptation (alpha = 0.02)
+        baselineTorsoYRef.current = 0.98 * (baselineTorsoYRef.current ?? torsoY) + 0.02 * torsoY;
+      }
+      const baselineY = baselineTorsoYRef.current ?? torsoY;
+      const dropFromBase = torsoY - baselineY;
+
+      // ── KINEMATIC FALL DESCENT DETECTOR ──
+      // Checks for rapid, uncontrolled downward drop in the last 120ms - 850ms
+      const descentCandidates = historyRef.current.filter(
+        (f) => now - f.timestamp >= 120 && now - f.timestamp <= 850
+      );
+      for (const past of descentCandidates) {
+        const dt = Math.max(0.08, (now - past.timestamp) / 1000);
+        const dy = torsoY - past.torsoY; // Positive = downward
+        const speed = dy / dt;
+        const dAngle = Math.abs(spineAngleDeg - past.spineAngleDeg);
+
+        // Kinematic fall descent: downward speed >= 0.35 with dy >= 0.08, or dy >= 0.12, or sudden tilt dAngle >= 25 with dy >= 0.06
+        const isViolentDrop = speed >= 0.35 && dy >= 0.08;
+        const isPlungeDrop = dy >= 0.12;
+        const isCollapseTilt = dAngle >= 25 && dy >= 0.06;
+
+        if (isViolentDrop || isPlungeDrop || isCollapseTilt) {
+          if (!fallCandidateRef.current) {
+            fallCandidateRef.current = {
+              timestamp: now,
+              startY: past.torsoY,
+              startSpineAngle: past.spineAngleDeg,
+            };
+            console.log(`[POSE FALL] Fall descent candidate detected: dy=${dy.toFixed(2)}, speed=${speed.toFixed(2)}, dropFromBase=${dropFromBase.toFixed(2)}`);
+          }
+          break;
+        }
       }
 
       // ── Wrist oscillation & agitation analysis (filtered for sensor jitter) ──
@@ -349,49 +482,49 @@ export function usePoseDetection(
         wristJitter = (diffSum / (recentHist.length * 4)) / refScale;
       }
 
-      // ── Posture & Activity Classification ──
-      // Real Floor Level Condition:
-      // Person must be lying horizontal (high spine tilt), OR full body has collapsed near bottom of frame
-      // CRITICAL: A person sitting at a desk with webcam showing upper body is NOT at floor level!
-      const hasLegs = kneeL && kneeR && (kneeL.visibility ?? 1) > 0.35 && (kneeR.visibility ?? 1) > 0.35;
-      
-      const isFloorLevel = hasHips
-        ? (spineAngleDeg > 62 && torsoY > 0.65) || (hasLegs && torsoY > 0.75 && aspectRatio < 0.75)
-        : (torsoY > 0.85 && (nose ? nose.y > 0.82 : true)); // Close-up webcam: whole upper body must drop to bottom
-
-      // Seated condition: upright spine, shoulders above hips, head in normal upper frame
-      const isSitting =
-        !isFloorLevel &&
-        verticalSpineSpan >= 0.08 &&
-        spineAngleDeg < 38 &&
-        torsoY < 0.72;
+      // ── POSTURE & ACTIVITY CLASSIFICATION ──
+      // Person is sitting upright at desk if spine is upright AND height is at baseline:
+      const isSittingAtDesk = verticalSpineSpan >= 0.08 && spineAngleDeg < 35 && dropFromBase < 0.10 && torsoY < 0.70;
 
       // Standing condition: tall bounding box, vertical posture, hips and knees visible
+      const hasLegs = kneeL && kneeR && (kneeL.visibility ?? 1) > 0.35 && (kneeR.visibility ?? 1) > 0.35;
       const isStanding =
-        !isFloorLevel &&
+        !isSittingAtDesk &&
         hasHips &&
         bboxHeight > 0.55 &&
         aspectRatio > 1.30 &&
         spineAngleDeg < 25;
 
+      // Floor / Lowered condition:
+      // The person has dropped visibly below baseline height or is tilted/collapsed on the floor
+      const isFloorLevel =
+        (dropFromBase >= 0.10) ||
+        (torsoY >= 0.68 && dropFromBase >= 0.05) ||
+        (spineAngleDeg > 42 && dropFromBase >= 0.05) ||
+        (spineAngleDeg > 55) ||
+        (nose && nose.y > 0.65 && dropFromBase >= 0.06);
+
+      // Sitting in general (desk or chair, not collapsed to floor)
+      const isSitting = !isFloorLevel && (isSittingAtDesk || (verticalSpineSpan >= 0.05 && torsoY < 0.80));
+
       // Walking / Moving: active lateral translation
-      const isWalking = !isFloorLevel && velX > 0.28 && spineAngleDeg < 30;
+      const isWalking = !isFloorLevel && !isSittingAtDesk && velX > 0.28 && spineAngleDeg < 30;
 
       // Controlled bending / reaching forward
       const isBending =
         !isFloorLevel &&
-        !isSitting &&
-        spineAngleDeg >= 38 &&
-        spineAngleDeg <= 62 &&
+        !isSittingAtDesk &&
+        spineAngleDeg >= 35 &&
+        spineAngleDeg <= 55 &&
         torsoY < 0.75;
 
       // Movement velocity classification
       let movementVelocity: 'Still' | 'Normal' | 'Rapid' | 'Erratic' = 'Normal';
       if (Math.abs(velY) < 0.06 && velX < 0.06) {
         movementVelocity = 'Still';
-      } else if (wristJitter > 0.45 && velX < 0.20) {
+      } else if (wristJitter > 0.50 && velX < 0.20) {
         movementVelocity = 'Erratic';
-      } else if (Math.abs(velY) > 0.90 || velX > 0.90) {
+      } else if (Math.abs(velY) > 0.85 || velX > 0.85) {
         movementVelocity = 'Rapid';
       }
 
@@ -407,89 +540,98 @@ export function usePoseDetection(
       setPosture(currentPosture);
 
       // ── BEHAVIOR ENGINE (Clinical Grade) ──
-      let detectedBehavior: DetectedBehavior = 'Sitting Comfortably';
+      let detectedBehavior: DetectedBehavior = isStanding ? 'Standing Upright' : 'Sitting Comfortably';
       let isAbnormal = false;
       let isEmergency = false;
       let stability = 95;
 
-      // 1. ACCURATE FALL DETECTION
-      // Real fall physics:
-      // a) Violent downward descent (free fall acceleration): torso drops rapidly (velY > 1.1 screen heights/sec or dy > 0.35 within 350ms)
-      // b) End state is horizontal / ground level collapse (isFloorLevel)
-      // c) Post-impact shock stillness: person remains down for at least 2.2 seconds (not just bending or sitting into a chair)
-      const collapseCandidates = historyRef.current.filter(
-        (f) => now - f.timestamp >= 150 && now - f.timestamp <= 600
-      );
-      const hadViolentDescent = collapseCandidates.some((f) => {
-        const dt = (now - f.timestamp) / 1000;
-        const dy = torsoY - f.torsoY;
-        const speed = dy / dt;
-        return speed >= 1.15 || dy >= 0.36;
-      });
+      // 1. ACCURATE FALL DETECTION (Descent + Ground Dwell of 0.8s)
+      const hasRecentDescent =
+        fallCandidateRef.current !== null && (now - fallCandidateRef.current.timestamp <= 4000);
 
-      if (hadViolentDescent && isFloorLevel) {
-        if (!collapseStartTime.current) {
-          collapseStartTime.current = now;
-        } else if (now - collapseStartTime.current >= 2200) {
-          // Sustained post-impact floor state for 2.2s -> CONFIRMED FALL
-          detectedBehavior = 'Fall Detected';
-          isEmergency = true;
-          isAbnormal = true;
-          stability = 10;
-          if (now - lastEmergencyTriggerTime.current > 18000) {
-            lastEmergencyTriggerTime.current = now;
-            setFallDetected(true);
-            onFallDetected?.({
-              type: 'FALL',
-              description: 'Sudden high-velocity collapse with post-impact immobility',
-              confidence: 0.96,
-              timestamp: now,
-            });
+      if (hasRecentDescent) {
+        if (isFloorLevel) {
+          // Person has dropped and remains in lowered / ground position
+          if (!collapseStartTime.current) {
+            collapseStartTime.current = now;
+            console.log('[POSE FALL] Ground collapse verified post-descent. Verifying dwell (0.8s)...');
+          } else if (now - collapseStartTime.current >= 800) {
+            // Sustained post-impact floor state for 0.8s -> CONFIRMED FALL
+            detectedBehavior = 'Fall Detected';
+            isEmergency = true;
+            isAbnormal = true;
+            stability = 10;
+            if (now - lastEmergencyTriggerTime.current > 15000) {
+              lastEmergencyTriggerTime.current = now;
+              fallCandidateRef.current = null;
+              collapseStartTime.current = null;
+              setFallDetected(true);
+              console.log('[POSE FALL] CONFIRMED FALL EVENT DISPATCHED');
+              onFallDetected?.({
+                type: 'FALL',
+                description: 'Severe posture collapse to floor',
+                confidence: 0.96,
+                timestamp: now,
+              });
+            }
+          }
+        } else {
+          // Check if person recovered upright smoothly
+          const isUprightAgain =
+            torsoY <= (baselineY + 0.05) && spineAngleDeg < 25 && isSittingAtDesk;
+          if (isUprightAgain && fallCandidateRef.current && (now - fallCandidateRef.current.timestamp > 600)) {
+            console.log('[POSE FALL] Person recovered upright — resetting fall candidate.');
+            fallCandidateRef.current = null;
+            collapseStartTime.current = null;
           }
         }
       } else {
         collapseStartTime.current = null;
       }
 
-      // 2. PROLONGED FLOOR IMMOBILITY (e.g. fallen out of sight or unable to get up)
-      // Must be genuinely at floor level, still, for at least 8 seconds
-      if (isFloorLevel && !isEmergency) {
+      // 2. PROLONGED FLOOR IMMOBILITY (ONLY if dropped significantly lower than baseline)
+      if (isFloorLevel && !isEmergency && dropFromBase >= 0.16) {
         if (!floorStartTime.current) {
           floorStartTime.current = now;
         } else {
           const floorSec = Math.floor((now - floorStartTime.current) / 1000);
-          if (floorSec >= 8) {
+          if (floorSec >= 6) {
             detectedBehavior = 'Prolonged Floor Immobility';
             isEmergency = true;
             isAbnormal = true;
             stability = 15;
             if (now - lastEmergencyTriggerTime.current > 18000) {
               lastEmergencyTriggerTime.current = now;
+              floorStartTime.current = null;
               setFallDetected(true);
+              console.log('[POSE FALL] Prolonged floor immobility (> 6s) dispatched');
               onFallDetected?.({
                 type: 'FLOOR_IMMOBILITY',
-                description: 'Senior stationary on floor for over 8 seconds',
-                confidence: 0.93,
+                description: 'Senior stationary on floor for over 6 seconds',
+                confidence: 0.94,
                 timestamp: now,
               });
             }
           }
         }
-      } else if (!isFloorLevel) {
+      } else {
         floorStartTime.current = null;
       }
 
       // 3. ABNORMAL SUDDEN SLUMP (Syncope / loss of tone while seated)
-      // Must be seated upright previously, then head/spine drops severely (> 50 deg) AND remains completely still for >= 7 seconds
+      // Must be seated, severe slump (spineAngle >= 42° AND head drops below/near shoulders),
+      // and virtually motionless for >= 4.5 seconds
       if (!isEmergency && isSitting) {
         const isSeverelySlumped =
-          spineAngleDeg > 48 ||
-          (nose && shoulderL && shoulderR && nose.y > (shoulderL.y + shoulderR.y) / 2 + 0.10);
+          (spineAngleDeg >= 42 && (nose ? nose.y > torsoY + 0.04 : true)) ||
+          (spineAngleDeg >= 50);
 
-        if (isSeverelySlumped && movementVelocity === 'Still') {
+        const isMotionless = Math.abs(velY) < 0.08 && velX < 0.08;
+
+        if (isSeverelySlumped && isMotionless) {
           if (!slumpStartTime.current) {
             slumpStartTime.current = now;
-          } else if (now - slumpStartTime.current >= 7000) {
+          } else if (now - slumpStartTime.current >= 4500) {
             detectedBehavior = 'Sudden Slump';
             isAbnormal = true;
             stability = 40;
@@ -497,7 +639,7 @@ export function usePoseDetection(
               lastAbnormalAlertTime.current = now;
               onAbnormalBehavior?.({
                 type: 'SUDDEN_SLUMP',
-                description: 'Unresponsive postural slump / loss of motor tone (> 7s)',
+                description: 'Unresponsive postural slump / loss of motor tone (> 4.5s)',
                 confidence: 0.88,
                 timestamp: now,
               });
@@ -509,11 +651,11 @@ export function usePoseDetection(
       }
 
       // 4. DISTRESS AGITATION / ERRATIC STRUGGLE
-      // High-frequency wrist agitation sustained for at least 4.5 seconds
-      if (!isEmergency && !isAbnormal && wristJitter > 0.45 && movementVelocity === 'Erratic') {
+      // High-frequency wrist agitation sustained for at least 3.5 seconds
+      if (!isEmergency && !isAbnormal && wristJitter >= 0.55 && velX < 0.18) {
         if (!agitationStartTime.current) {
           agitationStartTime.current = now;
-        } else if (now - agitationStartTime.current >= 4500) {
+        } else if (now - agitationStartTime.current >= 3500) {
           detectedBehavior = 'Distress Agitation';
           isAbnormal = true;
           stability = 35;
@@ -521,8 +663,8 @@ export function usePoseDetection(
             lastAbnormalAlertTime.current = now;
             onAbnormalBehavior?.({
               type: 'DISTRESS_AGITATION',
-              description: 'Persistent distress motor agitation / tremors (> 4.5s)',
-              confidence: 0.84,
+              description: 'Persistent distress motor agitation / tremors (> 3.5s)',
+              confidence: 0.86,
               timestamp: now,
             });
           }
@@ -671,22 +813,35 @@ export function usePoseDetection(
                 const currentPhase = ingestionPhaseRef.current;
                 const currentTimeMs = Date.now();
 
-                // ── STATE MACHINE ──
-                // Phase 0: IDLE (Waiting for hand to start in lower position)
+                // ── 4-PHASE MEDICATION INGESTION ARC ──
+                // Phase 0: IDLE (Waiting for hand to start lowered below chest)
                 if (currentPhase === 'IDLE') {
-                  if (isLeftLow) {
+                  if (isLeftLow && !isLeftAtMouth) {
                     activeHandRef.current = 'left';
-                    ingestionPhaseRef.current = 'HAND_RAISING';
-                  } else if (isRightLow) {
+                    handLoweredStartTime.current = currentTimeMs;
+                    ingestionPhaseRef.current = 'HAND_LOWERED';
+                  } else if (isRightLow && !isRightAtMouth) {
                     activeHandRef.current = 'right';
+                    handLoweredStartTime.current = currentTimeMs;
+                    ingestionPhaseRef.current = 'HAND_LOWERED';
+                  }
+                }
+                // Phase 1: HAND_LOWERED (Hand confirmed in lower rest position for >= 200ms)
+                else if (currentPhase === 'HAND_LOWERED') {
+                  const isLow = activeHandRef.current === 'left' ? isLeftLow : isRightLow;
+                  const targetDist = activeHandRef.current === 'left' ? distLeft : distRight;
+
+                  if (isLow) {
+                    // Hand remains lowered, ready for upward action
+                    setIngestionProgress(10);
+                  } else if (targetDist < 0.85 && (currentTimeMs - (handLoweredStartTime.current || 0) >= 200)) {
+                    // Hand has lifted from lowered rest and is traveling upward
                     ingestionPhaseRef.current = 'HAND_RAISING';
                   }
-                  // If hand is already at mouth on startup (e.g. resting chin), do NOT trigger false ingestion!
                 }
-                // Phase 1: HAND_RAISING (Tracking upward path to mouth)
+                // Phase 2: HAND_RAISING (Tracking upward path to mouth)
                 else if (currentPhase === 'HAND_RAISING') {
                   const targetDist = activeHandRef.current === 'left' ? distLeft : distRight;
-                  const isLow = activeHandRef.current === 'left' ? isLeftLow : isRightLow;
 
                   if (targetDist <= MOUTH_PROXIMITY_THRESHOLD) {
                     // Hand has successfully reached the mouth area
@@ -694,7 +849,7 @@ export function usePoseDetection(
                     atMouthStartTime.current = currentTimeMs;
                     setIsIngesting(true);
                     setIngestionProgress(35);
-                  } else if (targetDist > 1.2 && !isLow) {
+                  } else if (targetDist > 1.2) {
                     // Hand moved away or went off-screen without reaching mouth
                     ingestionPhaseRef.current = 'IDLE';
                     activeHandRef.current = null;
@@ -702,33 +857,27 @@ export function usePoseDetection(
                     setIngestionProgress(0);
                   } else {
                     // Hand in transit
-                    const approachPct = Math.min(30, Math.max(10, Math.round((1 - (targetDist / 1.0)) * 30)));
+                    const approachPct = Math.min(30, Math.max(15, Math.round((1 - (targetDist / 0.85)) * 30)));
                     setIngestionProgress(approachPct);
                   }
                 }
-                // Phase 2: AT_MOUTH (Drinking water / taking pill - requires sustained dwell of 1.6 seconds)
+                // Phase 3: AT_MOUTH (Drinking water / taking pill - requires sustained dwell of 1.4 seconds)
                 else if (currentPhase === 'AT_MOUTH') {
                   if (handAtMouth) {
                     setIsIngesting(true);
                     const dwellElapsed = currentTimeMs - (atMouthStartTime.current || currentTimeMs);
-                    // Dwell required: 1600ms
-                    const progress = Math.min(100, Math.round(35 + (dwellElapsed / 1600) * 65));
+                    const progress = Math.min(90, Math.round(35 + (dwellElapsed / 1400) * 55));
                     setIngestionProgress(progress);
 
                     // Confirmed Ingestion!
-                    if (dwellElapsed >= 1600 && currentTimeMs - lastIngestionTriggerTime.current > 8000) {
-                      lastIngestionTriggerTime.current = currentTimeMs;
-                      ingestionPhaseRef.current = 'IDLE';
-                      atMouthStartTime.current = null;
-                      activeHandRef.current = null;
-                      setIngestionProgress(100);
-                      setIsIngesting(false);
-                      onIngestionRef.current?.();
+                    if (dwellElapsed >= 1400) {
+                      ingestionPhaseRef.current = 'RETRACTING';
+                      setIngestionProgress(95);
                     }
                   } else {
                     // Hand moved away from mouth
                     const dwellElapsed = currentTimeMs - (atMouthStartTime.current || currentTimeMs);
-                    if (dwellElapsed >= 1300 && currentTimeMs - lastIngestionTriggerTime.current > 8000) {
+                    if (dwellElapsed >= 1100 && currentTimeMs - lastIngestionTriggerTime.current > 8000) {
                       // Hand dwelled at mouth and has now retracted -> Valid complete ingestion gesture!
                       lastIngestionTriggerTime.current = currentTimeMs;
                       ingestionPhaseRef.current = 'IDLE';
@@ -747,6 +896,21 @@ export function usePoseDetection(
                     }
                   }
                 }
+                // Phase 4: RETRACTING (Hand lowers away from mouth to seal confirmed intake)
+                else if (currentPhase === 'RETRACTING') {
+                  const isLow = activeHandRef.current === 'left' ? isLeftLow : isRightLow;
+                  const targetDist = activeHandRef.current === 'left' ? distLeft : distRight;
+
+                  if (!handAtMouth || isLow || targetDist > 0.45) {
+                    lastIngestionTriggerTime.current = currentTimeMs;
+                    ingestionPhaseRef.current = 'IDLE';
+                    atMouthStartTime.current = null;
+                    activeHandRef.current = null;
+                    setIngestionProgress(100);
+                    setIsIngesting(false);
+                    onIngestionRef.current?.();
+                  }
+                }
               }
 
               // ── Canvas Overlay Rendering ──
@@ -760,7 +924,7 @@ export function usePoseDetection(
                   }
                   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                  const isEmerg = collapseStartTime.current !== null || (floorStartTime.current !== null && (Date.now() - floorStartTime.current >= 4000));
+                  const isEmerg = collapseStartTime.current !== null || fallCandidateRef.current !== null || disappearanceStartTime.current !== null || (floorStartTime.current !== null && (Date.now() - floorStartTime.current >= 3000));
                   const isAbnorm = slumpStartTime.current !== null || agitationStartTime.current !== null;
 
                   const lineColor = isEmerg ? '#ef4444' : isAbnorm ? '#f59e0b' : '#10b981';
@@ -807,7 +971,7 @@ export function usePoseDetection(
                     // Draw target circle at mouth
                     ctx.beginPath();
                     ctx.arc(mouthX, mouthY, 22, 0, 2 * Math.PI);
-                    ctx.strokeStyle = ingestionPhaseRef.current === 'AT_MOUTH' ? '#10b981' : ingestionPhaseRef.current === 'HAND_RAISING' ? '#38bdf8' : '#f59e0b';
+                    ctx.strokeStyle = (ingestionPhaseRef.current === 'AT_MOUTH' || ingestionPhaseRef.current === 'RETRACTING') ? '#10b981' : ingestionPhaseRef.current === 'HAND_RAISING' ? '#38bdf8' : '#f59e0b';
                     ctx.lineWidth = 3;
                     ctx.stroke();
 
@@ -820,16 +984,18 @@ export function usePoseDetection(
                     }
                     ctx.fill();
 
-                    ctx.fillStyle = ingestionPhaseRef.current === 'AT_MOUTH' ? '#34d399' : ingestionPhaseRef.current === 'HAND_RAISING' ? '#38bdf8' : '#fbbf24';
+                    ctx.fillStyle = (ingestionPhaseRef.current === 'AT_MOUTH' || ingestionPhaseRef.current === 'RETRACTING') ? '#34d399' : ingestionPhaseRef.current === 'HAND_RAISING' ? '#38bdf8' : '#fbbf24';
                     ctx.font = 'bold 13px system-ui, sans-serif';
 
                     let promptText = '💊 Medication Mode: Bring medicine/water to mouth';
-                    if (ingestionPhaseRef.current === 'AT_MOUTH') {
+                    if (ingestionPhaseRef.current === 'AT_MOUTH' || ingestionPhaseRef.current === 'RETRACTING') {
                       const dwellElapsed = Date.now() - (atMouthStartTime.current || Date.now());
-                      const pct = Math.min(100, Math.round(35 + (dwellElapsed / 1600) * 65));
+                      const pct = Math.min(95, Math.round(35 + (dwellElapsed / 1400) * 60));
                       promptText = `💊 Taking Medicine (Swallowing)... ${pct}%`;
                     } else if (ingestionPhaseRef.current === 'HAND_RAISING') {
                       promptText = '💊 Hand moving to mouth...';
+                    } else if (ingestionPhaseRef.current === 'HAND_LOWERED') {
+                      promptText = '💊 Ready — raise pill or water to mouth';
                     }
                     ctx.fillText(promptText, 24, 35);
 
@@ -841,12 +1007,26 @@ export function usePoseDetection(
                 }
               }
             } else {
-              setPosture('No Person');
-              setBehavior('No Person');
-              setLandmarksCount(0);
+              analyzeFrame([]);
               if (canvas) {
                 const ctx = canvas.getContext('2d');
-                if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (ctx) {
+                  ctx.clearRect(0, 0, canvas.width, canvas.height);
+                  // Render warning banner if user suddenly vanished from camera following downward drop
+                  if (disappearanceStartTime.current !== null) {
+                    const elapsed = ((Date.now() - disappearanceStartTime.current) / 1000).toFixed(1);
+                    ctx.fillStyle = 'rgba(220, 38, 38, 0.90)';
+                    if ((ctx as any).roundRect) {
+                      (ctx as any).roundRect(14, 14, canvas.width - 28, 42, 10);
+                    } else {
+                      ctx.fillRect(14, 14, canvas.width - 28, 42);
+                    }
+                    ctx.fill();
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 13px system-ui, sans-serif';
+                    ctx.fillText(`🚨 SUDDEN COLLAPSE DETECTED — Verifying floor immobility (${elapsed}s)...`, 26, 40);
+                  }
+                }
               }
             }
           } catch (e) {
@@ -874,6 +1054,9 @@ export function usePoseDetection(
     setFallDetected(false);
     collapseStartTime.current = null;
     floorStartTime.current = null;
+    disappearanceStartTime.current = null;
+    fallCandidateRef.current = null;
+    baselineTorsoYRef.current = null;
     slumpStartTime.current = null;
     agitationStartTime.current = null;
     lastEmergencyTriggerTime.current = 0;

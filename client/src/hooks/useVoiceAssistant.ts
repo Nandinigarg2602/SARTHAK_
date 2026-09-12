@@ -24,16 +24,19 @@ interface UseVoiceAssistantReturn {
   speakText: (text: string, langCode?: string) => void;
 }
 
-// Comprehensive Hindi, Hinglish, English, and Regional Distress Regex
-export const DISTRESS_REGEX = /(बचाओ|मदद|सहायता|दर्द|चक्कर|तबीयत|बीमार|तकलीफ|तकलीफ़|छाती|सांस|साँस|उठ|उठा|गिर|गिरा|गिरी|डॉक्टर|अस्पताल|एम्बुलेंस|कॉल|फ़ोन|फोन|चोट|खून|घबराहट|बेहोश|कष्ट|हेल्प|हैल्प|हैलप|परेशानी|बुलाओ|मददगार|bachao|madad|sahayata|dard|chakkar|tabiyat|bimar|beemar|takleef|taklif|chhati|saans|saas|uth nahi|utha nahi|gir gaya|gir gayi|gir pada|gira|giri|doctor|daktar|ambulance|hospital|call karo|phone karo|chot|khoon|ghabrahat|behosh|help|help me|emergency|save me|i fell|cannot get up|chest pain|dizzy|heart attack|stroke|ambulance|pain|heart pain|cannot breathe|ಸಹಾಯ|ಕಾಪಾಡಿ|ಬಿದ್ದಿದ್ದೇನೆ|sahaya|kaapadi)/i;
+// Comprehensive Hindi, Hinglish, English, and Regional Distress Regex (Filtered with word boundaries)
+export const DISTRESS_REGEX = /(बचाओ|मदद करो|मदद चाहिए|मदद की जरूरत|मुझे बचाओ|बचा लो|चक्कर आ रहे|तबीयत खराब|बहुत बीमार|गंभीर तकलीफ|छाती में दर्द|सांस नहीं आ रही|उठ नहीं पा रहा|उठ नहीं पा रही|गिर गया|गिर गई|गिर पड़ा|डॉक्टर को बुलाओ|एम्बुलेंस बुलाओ|कॉल करो|फोन करो|चोट लग गई|चोट लगी|खून बह रहा|घबराहट हो रही|बेहोश हो रहा|कष्ट में हूँ|हेल्प करो|हैल्प करो|मददगार बुलाओ|हालत बहुत खराब|गंभीर हालत|\bbachao\b|\bmadad\b|\bmadad karo\b|\bsahayata\b|\bdard ho raha\b|\bchakkar\b|\btabiyat kharab\b|\bbeemar\b|\btakleef\b|\bchhati me dard\b|\bsaans nahi\b|\buth nahi\b|\butha nahi\b|\bgir gaya\b|\bgir gayi\b|\bgir pada\b|\bdoctor bulao\b|\bambulance bulao\b|\bcall karo\b|\bphone karo\b|\bchot lagi\b|\bghabrahat\b|\bhelp\b|\bhelp me\b|\bemergency\b|\bsave me\b|\bi fell\b|\bfell down\b|\bcannot get up\b|\bcant get up\b|\bchest pain\b|\bheart attack\b|\bstroke\b|\bambulance\b|\bsevere pain\b|\bcannot breathe\b|\bcant breathe\b|\bneed help\b|\bplease help\b|\byes help\b|\bcall help\b|\bsend help\b|\bcall caregiver\b|\bcall family\b|\bcall someone\b|\bcall emergency\b|\bcall ambulance\b|ಸಹಾಯ|ಕಾಪಾಡಿ|ಬಿದ್ದಿದ್ದೇನೆ|\bsahaya\b|\bkaapadi\b|\bbiddiddene\b)/i;
 
 // Comprehensive Safe / Cancel Confirmation Regex
 export const SAFE_REGEX = /(ठीक हूँ|ठीक हु|मैं ठीक हूँ|सब ठीक है|कोई बात नहीं|चिंता मत करो|चिंता न करो|मदद मिल गई|अलार्म बंद|सुरक्षित हूँ|सुरक्षित|theek hoon|thik hu|thik hai|theek hai|main theek|sab theek|chinta mat|madad mil|safe|i am ok|i am fine|all good|false alarm|cancel|dismiss|no problem|help arrived|help is here|got help|resolved|all clear|doctor is here|safe now|emergency resolved|ಸಹಾಯ ಸಿಕ್ಕಿತು)/i;
 
 const DISTRESS_KEYWORDS = [
-  'help', 'help me', 'emergency', 'i fell', 'cannot get up', 'call doctor', 'ambulance', 'pain', 'save me',
-  'बचाओ', 'मदद', 'मदद करो', 'गिर गया', 'गिर गई', 'उठ नहीं पा रहा', 'चक्कर आ रहे', 'दर्द हो रहा', 'डॉक्टर को बुलाओ', 'छाती में दर्द', 'सांस नहीं',
-  'bachao', 'madad', 'bachao bachao', 'madad karo', 'gir gaya', 'dard ho raha', 'chhati me dard',
+  'help', 'help me', 'emergency', 'i fell', 'fell down', 'cannot get up', "can't get up", 'call doctor',
+  'call caregiver', 'call family', 'ambulance', 'save me', 'need help', 'please help', 'yes help',
+  'send help', 'call someone', 'cannot breathe', "can't breathe", 'chest pain', 'severe pain',
+  'बचाओ', 'मदद', 'मदद करो', 'गिर गया', 'गिर गई', 'उठ नहीं पा रहा', 'चक्कर आ रहे', 'दर्द हो रहा', 'डॉक्टर को बुलाओ',
+  'छाती में दर्द', 'सांस नहीं', 'चोट लगी', 'बचा लो', 'तबीयत खराब', 'मदद चाहिए',
+  'bachao', 'madad', 'bachao bachao', 'madad karo', 'gir gaya', 'gir gayi', 'dard ho raha', 'chhati me dard', 'chot lagi',
   'ಸಹಾಯ', 'ಕಾಪಾಡಿ', 'ಬಿದ್ದಿದ್ದೇನೆ', 'sahaya', 'kaapadi'
 ];
 
@@ -63,7 +66,10 @@ export function useVoiceAssistant({
   });
 
   const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef<boolean>(false);
   const isPausedRef = useRef<boolean>(false);
+  const isSystemSpeakingRef = useRef<boolean>(false);
+  const systemSpokenPhrasesRef = useRef<string[]>([]);
   const lastDistressTime = useRef<number>(0);
   const lastProcessedTextRef = useRef<string>('');
   const lastProcessedTimeRef = useRef<number>(0);
@@ -116,6 +122,23 @@ export function useVoiceAssistant({
       utterance.rate = 0.95;
       utterance.pitch = 1.0;
 
+      // Register spoken prompt to prevent speech recognition from self-hearing and looping
+      isSystemSpeakingRef.current = true;
+      (window as any).__sarthak_is_speaking = true;
+      const lower = text.toLowerCase();
+      systemSpokenPhrasesRef.current = [lower, ...systemSpokenPhrasesRef.current.slice(0, 4)];
+
+      utterance.onend = () => {
+        setTimeout(() => {
+          isSystemSpeakingRef.current = false;
+          (window as any).__sarthak_is_speaking = false;
+        }, 800);
+      };
+      utterance.onerror = () => {
+        isSystemSpeakingRef.current = false;
+        (window as any).__sarthak_is_speaking = false;
+      };
+
       const hasHindi = /[\u0900-\u097F]/.test(text);
       const hasKannada = /[\u0C80-\u0CFF]/.test(text);
 
@@ -146,6 +169,8 @@ export function useVoiceAssistant({
       setLastResponse(text);
     } catch (e) {
       console.warn('[VOICE] Speech synthesis error:', e);
+      isSystemSpeakingRef.current = false;
+      (window as any).__sarthak_is_speaking = false;
       setLastResponse(text);
     }
   }, [listeningLanguage]);
@@ -153,6 +178,13 @@ export function useVoiceAssistant({
   const processPhrase = useCallback(async (rawPhrase: string, isInstantEmergency: boolean = false) => {
     const text = rawPhrase.trim().toLowerCase();
     if (!text) return;
+
+    // 0. Echo suppression: ONLY ignore if assistant is actively speaking and the heard phrase matches the assistant's own prompt
+    const isEchoOfSystem = /(noticed a sudden movement|calling designated caregiver|calling caregiver|emergency distress recognized|आपातकालीन सहायता सुनी गई|कॉल की जा रही है)/i.test(text);
+    if (isSystemSpeakingRef.current && isEchoOfSystem) {
+      console.log('[VOICE] Echo of system prompt ignored to prevent glitching loop:', text);
+      return;
+    }
 
     // Prevent re-processing identical phrase within 2.5 seconds
     const now = Date.now();
@@ -163,10 +195,13 @@ export function useVoiceAssistant({
     lastProcessedTimeRef.current = now;
     setTranscript(rawPhrase);
 
-    // 1. Instant check for high-priority distress screams (Devanagari, Hinglish, English, or Kannada)
-    const hasDistress = DISTRESS_REGEX.test(rawPhrase) || DISTRESS_REGEX.test(text) || DISTRESS_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()));
+    // 1. Check if phrase is a negated safe statement (e.g., "I am not okay", "theek nahi hoon", "not safe") -> That is DISTRESS!
+    const isNegatedSafe = /(not ok|not okay|not fine|not safe|theek nahi|thik nahi|nahi theek|nahi thik|nahi hu theek|ठीक नहीं|नहीं ठीक|सुरक्षित नहीं|मदद चाहिए)/i.test(text);
+
+    // 2. Instant check for high-priority distress screams (Devanagari, Hinglish, English, or Kannada)
+    const hasDistress = isNegatedSafe || DISTRESS_REGEX.test(rawPhrase) || DISTRESS_REGEX.test(text) || DISTRESS_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()));
     if (hasDistress) {
-      if (now - lastDistressTime.current > 4000) {
+      if (now - lastDistressTime.current > 3000) {
         lastDistressTime.current = now;
         const isHi = /[\u0900-\u097F]/.test(rawPhrase) || /bachao|madad|dard|chakkar|gir|tabiyat|chhati|saans|ghabrahat|doctor|bimar|takleef/i.test(text) || listeningLanguage === 'hi';
         const isKn = /[\u0C80-\u0CFF]/.test(rawPhrase) || /sahaya|kaapadi/i.test(text) || listeningLanguage === 'kn';
@@ -184,7 +219,8 @@ export function useVoiceAssistant({
     }
 
     // 2. Instant check for safe confirmation ("i am ok", "theek hoon", "false alarm")
-    const hasSafe = SAFE_REGEX.test(rawPhrase) || SAFE_REGEX.test(text) || SAFE_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()));
+    const isQuestionPrompt = /(are you okay|are you ok|kya aap theek|kya aap thik|क्या आप ठीक|क्या आप thik)/i.test(text);
+    const hasSafe = !isNegatedSafe && !isQuestionPrompt && (SAFE_REGEX.test(rawPhrase) || SAFE_REGEX.test(text) || SAFE_KEYWORDS.some((kw) => text.includes(kw.toLowerCase())));
     if (hasSafe) {
       const isHi = /[\u0900-\u097F]/.test(rawPhrase) || /theek|thik|chinta|madad|surakshit/i.test(text) || listeningLanguage === 'hi';
       const isKn = /[\u0C80-\u0CFF]/.test(rawPhrase) || listeningLanguage === 'kn';
@@ -270,6 +306,7 @@ export function useVoiceAssistant({
 
   const stopListening = useCallback(() => {
     isPausedRef.current = true;
+    isListeningRef.current = false;
     if (restartTimeoutRef.current) {
       clearTimeout(restartTimeoutRef.current);
       restartTimeoutRef.current = null;
@@ -291,10 +328,18 @@ export function useVoiceAssistant({
     setIsListening(false);
   }, []);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     if (!isSupported) {
       console.warn('[VOICE] Speech recognition not supported in this browser.');
       setIsListening(false);
+      isListeningRef.current = false;
+      return;
+    }
+
+    // If recognition is already actively running, preserve it without disruption
+    if (recognitionRef.current && isListeningRef.current) {
+      isPausedRef.current = false;
+      setIsListening(true);
       return;
     }
 
@@ -316,10 +361,21 @@ export function useVoiceAssistant({
       } catch {}
     }
 
+    // Unlock microphone permissions in browser
+    try {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    } catch (err) {
+      console.warn('[VOICE] Browser microphone permission check:', err);
+    }
+
     try {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) {
         setIsListening(false);
+        isListeningRef.current = false;
         return;
       }
       const recognition = new SpeechRecognition();
@@ -329,9 +385,9 @@ export function useVoiceAssistant({
       recognition.lang = listeningLanguage === 'hi' ? 'hi-IN' : listeningLanguage === 'kn' ? 'kn-IN' : 'en-IN';
 
       recognition.onstart = () => {
-        if (!isPausedRef.current) {
-          setIsListening(true);
-        }
+        isListeningRef.current = true;
+        setIsListening(true);
+        console.log('[VOICE] Microphone listening started');
       };
 
       recognition.onresult = (event: any) => {
@@ -357,10 +413,15 @@ export function useVoiceAssistant({
         // Check interim text for urgent emergency distress keywords to trigger 0ms latency
         if (interimPhrase) {
           const lowerInterim = interimPhrase.toLowerCase();
-          const hasInstant = DISTRESS_REGEX.test(interimPhrase) || DISTRESS_REGEX.test(lowerInterim) || DISTRESS_KEYWORDS.some((kw) => lowerInterim.includes(kw.toLowerCase()));
-          if (hasInstant) {
-            processPhrase(interimPhrase, true);
-            return;
+          const isSystemPrompt = /(noticed a sudden movement|are you okay|क्या आप ठीक|अचानक हरकत|emergency distress recognized|calling designated caregiver|calling caregiver|आपातकालीन सहायता सुनी गई|कॉल की जा रही है)/i.test(lowerInterim);
+
+          if (!isSystemSpeakingRef.current || !isSystemPrompt) {
+            const isNegated = /(not ok|not okay|not fine|theek nahi|thik nahi|nahi theek|ठीक नहीं)/i.test(lowerInterim);
+            const hasInstant = isNegated || DISTRESS_REGEX.test(interimPhrase) || DISTRESS_REGEX.test(lowerInterim) || DISTRESS_KEYWORDS.some((kw) => lowerInterim.includes(kw.toLowerCase()));
+            if (hasInstant) {
+              processPhrase(interimPhrase, true);
+              return;
+            }
           }
 
           // Debounce interim conversational speech if user pauses speaking
@@ -387,12 +448,13 @@ export function useVoiceAssistant({
       recognition.onerror = (err: any) => {
         console.warn('[VOICE] Speech error:', err?.error);
         if (err?.error === 'not-allowed' || err?.error === 'service-not-allowed') {
-          isPausedRef.current = true;
+          isListeningRef.current = false;
           setIsListening(false);
         }
       };
 
       recognition.onend = () => {
+        isListeningRef.current = false;
         if (recognitionRef.current === recognition) {
           recognitionRef.current = null;
         }
@@ -414,14 +476,16 @@ export function useVoiceAssistant({
       recognition.start();
       recognitionRef.current = recognition;
       setIsListening(true);
+      isListeningRef.current = true;
     } catch (err) {
       console.error('[VOICE] Failed to start recognition:', err);
+      isListeningRef.current = false;
       setIsListening(false);
     }
   }, [isSupported, listeningLanguage, processPhrase]);
 
   const toggleListening = useCallback(() => {
-    if (isListening || !isPausedRef.current && recognitionRef.current) {
+    if (isListeningRef.current || isListening) {
       stopListening();
     } else {
       startListening();
