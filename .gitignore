@@ -8,6 +8,7 @@ dist/
 build/
 *.tsbuildinfo
 *.timestamp-*.mjs
+.vite/
 
 # Environment
 .env
